@@ -1,5 +1,6 @@
 import "dotenv/config";
 import { db } from "../db";
+import { DEFAULT_TRACKED_SOURCE_IDS } from "../triggers/exchangeRate/sources";
 import { events, householdTasks } from "./schema";
 
 async function main() {
@@ -10,9 +11,9 @@ async function main() {
       type: "exchange_rate",
       config: {
         city: "Жлобин",
-        fromCurrency: "RUB",
-        toCurrency: "BYN",
-        minRatePer100: 3.2,
+        sources: DEFAULT_TRACKED_SOURCE_IDS,
+        windowDays: 14,
+        thresholdPercent: 0.01,
       },
       recipientEmail: "daturon@gmail.com",
     })

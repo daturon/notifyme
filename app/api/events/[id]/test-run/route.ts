@@ -19,7 +19,7 @@ export async function POST(_request: NextRequest, { params }: { params: Promise<
       throw new ApiError(500, `No provider registered for event type: ${event.type}`);
     }
 
-    const result = await provider.check(event.config);
+    const result = await provider.check(event.config, { eventId: event.id });
 
     const logEntry = await insertRunLog({
       eventId: event.id,

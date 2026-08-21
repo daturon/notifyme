@@ -106,4 +106,14 @@ export function getEventTypes(): Promise<{ types: EventType[] }> {
   return request("/api/event-types");
 }
 
+export interface RateHistoryPoint {
+  recordedAt: string;
+  rate: number;
+  sourceName: string;
+}
+
+export function getEventRateHistory(id: string, limit = 30): Promise<{ series: RateHistoryPoint[] }> {
+  return request(`/api/events/${id}/rate-history?limit=${limit}`);
+}
+
 export { ApiClientError };

@@ -3,7 +3,16 @@
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import {
+  DEFAULT_EXCHANGE_RATE_FORM_CONFIG,
+  ExchangeRateConfigForm,
+  exchangeRateFormConfigFromEventConfig,
+  exchangeRateFormConfigToEventConfig,
+  type ExchangeRateFormConfig,
+} from "@/components/ExchangeRateConfigForm";
 import { getEventTypes, type Event, type EventInput } from "@/lib/api/events";
+
+const EXCHANGE_RATE_TYPE = "exchange_rate";
 
 export interface EventFormValues {
   name: string;
@@ -11,6 +20,7 @@ export interface EventFormValues {
   recipientEmail: string;
   isActive: boolean;
   configText: string;
+  exchangeRateConfig: ExchangeRateFormConfig;
 }
 
 function toFormValues(event?: Event): EventFormValues {
@@ -19,7 +29,11 @@ function toFormValues(event?: Event): EventFormValues {
     type: event?.type ?? "",
     recipientEmail: event?.recipientEmail ?? "",
     isActive: event?.isActive ?? true,
-    configText: event ? JSON.stringify(event.config, null, 2) : "{}",
+    configText: event && event.type !== EXCHANGE_RATE_TYPE ? JSON.stringify(event.config, null, 2) : "{}",
+    exchangeRateConfig:
+      event?.type === EXCHANGE_RATE_TYPE
+        ? exchangeRateFormConfigFromEventConfig(event.config)
+        : DEFAULT_EXCHANGE_RATE_FORM_CONFIG,
   };
 }
 
@@ -51,11 +65,19 @@ export function EventForm({
     setConfigError(null);
 
     let config: unknown;
-    try {
-      config = JSON.parse(values.configText);
-    } catch {
-      setConfigError("Некорректный JSON");
-      return;
+    if (values.type === EXCHANGE_RATE_TYPE) {
+      if (values.exchangeRateConfig.sources.length === 0) {
+        setConfigError("Выберите хотя бы один отслеживаемый пункт");
+        return;
+      }
+      config = exchangeRateFormConfigToEventConfig(values.exchangeRateConfig);
+    } else {
+      try {
+        config = JSON.parse(values.configText);
+      } catch {
+        setConfigError("Некорректный JSON");
+        return;
+      }
     }
 
     await onSubmit({
@@ -135,20 +157,31 @@ export function EventForm({
         Событие активно
       </label>
 
-      <div className="flex flex-col gap-1">
-        <label htmlFor="config" className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-          Config (JSON)
-        </label>
-        <textarea
-          id="config"
-          rows={8}
-          value={values.configText}
-          onChange={(e) => update("configText", e.target.value)}
-          spellCheck={false}
-          className="rounded-md border border-zinc-300 bg-white px-3 py-2 font-mono text-sm text-black focus:border-zinc-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
-        />
-        {configError && <p className="text-xs text-red-600 dark:text-red-400">{configError}</p>}
-      </div>
+      {values.type === EXCHANGE_RATE_TYPE ? (
+        <div className="flex flex-col gap-1">
+          <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Параметры триггера</span>
+          <ExchangeRateConfigForm
+            value={values.exchangeRateConfig}
+            onChange={(exchangeRateConfig) => update("exchangeRateConfig", exchangeRateConfig)}
+          />
+          {configError && <p className="text-xs text-red-600 dark:text-red-400">{configError}</p>}
+        </div>
+      ) : (
+        <div className="flex flex-col gap-1">
+          <label htmlFor="config" className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+            Config (JSON)
+          </label>
+          <textarea
+            id="config"
+            rows={8}
+            value={values.configText}
+            onChange={(e) => update("configText", e.target.value)}
+            spellCheck={false}
+            className="rounded-md border border-zinc-300 bg-white px-3 py-2 font-mono text-sm text-black focus:border-zinc-500 focus:outline-none dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+          />
+          {configError && <p className="text-xs text-red-600 dark:text-red-400">{configError}</p>}
+        </div>
+      )}
 
       {submitError && (
         <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">

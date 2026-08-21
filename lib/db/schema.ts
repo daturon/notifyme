@@ -29,10 +29,12 @@ import {
   index,
   integer,
   jsonb,
+  numeric,
   pgEnum,
   pgTable,
   text,
   timestamp,
+  unique,
   uuid,
 } from "drizzle-orm/pg-core";
 
@@ -78,6 +80,32 @@ export const householdTasks = pgTable(
   (table) => [index("household_tasks_event_id_idx").on(table.eventId)],
 );
 
+// Временной ряд курсов для типа exchange_rate (раздел 5 ТЗ) — источник для
+// скользящего окна/локального максимума (раздел 4.2). Одна запись в сутки на
+// событие: source_name — точка обмена, давшая лучший (максимальный) курс в
+// этот день; rate — курс сдачи RUB в BYN за 100 RUB.
+export const rateHistory = pgTable(
+  "rate_history",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => events.id, { onDelete: "cascade" }),
+    sourceName: text("source_name").notNull(),
+    rate: numeric("rate", { precision: 10, scale: 4 }).notNull(),
+    recordedAt: date("recorded_at").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index("rate_history_event_id_idx").on(table.eventId),
+    unique("rate_history_event_source_date_unique").on(
+      table.eventId,
+      table.sourceName,
+      table.recordedAt,
+    ),
+  ],
+);
+
 // Лог каждого запуска cron-проверки — для отладки и истории (раздел 3, шаг 5).
 export const runLog = pgTable(
   "run_log",
@@ -113,12 +141,17 @@ export const notificationLog = pgTable(
 
 export const eventsRelations = relations(events, ({ many }) => ({
   householdTasks: many(householdTasks),
+  rateHistory: many(rateHistory),
   runLog: many(runLog),
   notificationLog: many(notificationLog),
 }));
 
 export const householdTasksRelations = relations(householdTasks, ({ one }) => ({
   event: one(events, { fields: [householdTasks.eventId], references: [events.id] }),
+}));
+
+export const rateHistoryRelations = relations(rateHistory, ({ one }) => ({
+  event: one(events, { fields: [rateHistory.eventId], references: [events.id] }),
 }));
 
 export const runLogRelations = relations(runLog, ({ one }) => ({

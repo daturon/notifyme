@@ -3,7 +3,8 @@
 import { useQuery } from "@tanstack/react-query";
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { getEvent, getEventHistory } from "@/lib/api/events";
+import { RateHistoryChart } from "@/components/RateHistoryChart";
+import { getEvent, getEventHistory, getEventRateHistory } from "@/lib/api/events";
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleString("ru-RU");
@@ -17,6 +18,12 @@ export default function EventHistoryPage() {
   const historyQuery = useQuery({
     queryKey: ["events", id, "history"],
     queryFn: () => getEventHistory(id),
+  });
+  const isExchangeRate = eventQuery.data?.event.type === "exchange_rate";
+  const rateHistoryQuery = useQuery({
+    queryKey: ["events", id, "rate-history"],
+    queryFn: () => getEventRateHistory(id),
+    enabled: isExchangeRate,
   });
 
   return (
@@ -36,6 +43,14 @@ export default function EventHistoryPage() {
         <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-950 dark:text-red-300">
           Не удалось загрузить историю
         </p>
+      )}
+
+      {isExchangeRate && (
+        <section className="flex flex-col gap-2">
+          <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300">Курс за последние дни</h2>
+          {rateHistoryQuery.isLoading && <p className="text-sm text-zinc-500">Загрузка…</p>}
+          {rateHistoryQuery.data && <RateHistoryChart points={rateHistoryQuery.data.series} />}
+        </section>
       )}
 
       {historyQuery.data && (
