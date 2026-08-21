@@ -14,6 +14,12 @@ export async function listEvents(): Promise<EventRow[]> {
   return db.select().from(events).orderBy(desc(events.createdAt));
 }
 
+// Используется cron-обработчиком (раздел 3 ТЗ) — проверяет только активные
+// события, полагается на индекс events_is_active_idx.
+export async function listActiveEvents(): Promise<EventRow[]> {
+  return db.select().from(events).where(eq(events.isActive, true));
+}
+
 export async function getEventById(id: string): Promise<EventRow | undefined> {
   const [event] = await db.select().from(events).where(eq(events.id, id)).limit(1);
   return event;

@@ -53,9 +53,29 @@ pnpm run db:studio
 | PUT    | `/api/events/:id`          | изменить событие                                                  |
 | DELETE | `/api/events/:id`          | удалить событие                                                   |
 | POST   | `/api/events/:id/test-run` | проверить условие провайдера без отправки письма, пишет в run_log |
+| POST   | `/api/events/:id/send-test`| отправить тестовое письмо (не завязано на срабатывание триггера)  |
 | GET    | `/api/events/:id/history`  | последние N записей run_log и notification_log (`?limit=`)        |
+| GET/POST | `/api/cron/run`          | вызывается Vercel Cron; проверяет все активные события и шлёт уведомления (см. «Cron» ниже) |
 
-Cron-эндпоинт и UI пока не реализованы.
+## Cron
+
+`/api/cron/run` (раздел 3, 6 ТЗ) закрыт заголовком `Authorization: Bearer $CRON_SECRET` — запрос без него или с неверным значением получает 401. При успешной авторизации обработчик выбирает все активные события, для каждого вызывает `check()` соответствующего провайдера из `lib/triggers/registry.ts` и `notifyIfNeeded()` из `lib/notifications/engine.ts`. Каждое событие обрабатывается в своём `try/catch` — падение одного провайдера не прерывает обработку остальных. Ответ — сводка: `checked`, `triggered`, `sent`, список `results` по каждому событию и `errors`, если были.
+
+Расписание задано в `vercel.json` (`0 5 * * *`, т.е. 5:00–5:59 UTC — 8:00–8:59 по Europe/Minsk, часовому поясу, который использует Notification Engine для дедупликации "1 письмо в сутки"). Vercel Cron всегда работает в UTC и на Hobby-плане срабатывает в пределах часа, а не в точную минуту.
+
+Протестировать эндпоинт локально, не дожидаясь реального срабатывания cron:
+
+```bash
+# .env.local должен содержать тот же CRON_SECRET, что используется ниже
+pnpm run dev
+
+curl -i -X POST http://localhost:3000/api/cron/run \
+  -H "Authorization: Bearer $CRON_SECRET"
+```
+
+Без корректного заголовка (или без него) эндпоинт вернёт `401 Unauthorized`.
+
+**После деплоя обязательно проверьте в Vercel Dashboard (Project → Settings → Environment Variables), что переменная `CRON_SECRET` задана для production-окружения** — Vercel сам подставляет её значение в заголовок `Authorization: Bearer …` при вызове cron-задач (раздел 7 ТЗ), поэтому значение в Vercel и значение, которое проверяет `/api/cron/run`, должны быть одной и той же переменной окружения проекта, а не двумя независимо придуманными секретами.
 
 ## Скрипты
 
