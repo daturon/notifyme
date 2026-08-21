@@ -11,6 +11,15 @@ const links = [
 export function Nav() {
   const pathname = usePathname();
 
+  if (pathname === "/login") {
+    return null;
+  }
+
+  async function handleLogout() {
+    await fetch("/api/auth/logout", { method: "POST" });
+    window.location.href = "/login";
+  }
+
   return (
     <header className="border-b border-zinc-200 bg-white dark:border-zinc-800 dark:bg-black">
       <nav className="mx-auto flex max-w-3xl items-center gap-1 overflow-x-auto px-4 py-3 sm:gap-4">
@@ -36,6 +45,12 @@ export function Nav() {
             </Link>
           );
         })}
+        <button
+          onClick={handleLogout}
+          className="ml-auto shrink-0 rounded-md px-3 py-1.5 text-sm text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-900"
+        >
+          Выйти
+        </button>
       </nav>
     </header>
   );
