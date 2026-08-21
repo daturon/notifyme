@@ -102,6 +102,10 @@ export function testRunEvent(id: string): Promise<TestRunResult> {
   return request(`/api/events/${id}/test-run`, { method: "POST" });
 }
 
+export function sendTestEmail(id: string): Promise<{ success: true }> {
+  return request(`/api/events/${id}/send-test`, { method: "POST" });
+}
+
 export function getEventTypes(): Promise<{ types: EventType[] }> {
   return request("/api/event-types");
 }

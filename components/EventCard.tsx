@@ -6,6 +6,7 @@ import { useState } from "react";
 import {
   ApiClientError,
   getEventHistory,
+  sendTestEmail,
   testRunEvent,
   updateEvent,
   type Event,
@@ -22,6 +23,7 @@ export function EventCard({ event }: { event: Event }) {
   const queryClient = useQueryClient();
   const [testRunResult, setTestRunResult] = useState<TestRunResult | null>(null);
   const [testRunFailed, setTestRunFailed] = useState<string | null>(null);
+  const [testEmailFeedback, setTestEmailFeedback] = useState<{ ok: boolean; message: string } | null>(null);
 
   const historyQuery = useQuery({
     queryKey: ["events", event.id, "history", "summary"],
@@ -44,6 +46,19 @@ export function EventCard({ event }: { event: Event }) {
     },
     onError: (err) => {
       setTestRunFailed(err instanceof ApiClientError ? err.message : "Не удалось выполнить проверку");
+    },
+  });
+
+  const sendTestEmailMutation = useMutation({
+    mutationFn: () => sendTestEmail(event.id),
+    onSuccess: () => {
+      setTestEmailFeedback({ ok: true, message: `Тестовое письмо отправлено на ${event.recipientEmail}` });
+    },
+    onError: (err) => {
+      setTestEmailFeedback({
+        ok: false,
+        message: err instanceof ApiClientError ? err.message : "Не удалось отправить тестовое письмо",
+      });
     },
   });
 
@@ -87,6 +102,16 @@ export function EventCard({ event }: { event: Event }) {
         >
           {testRunMutation.isPending ? "Проверяем…" : "Проверить сейчас"}
         </button>
+        <button
+          onClick={() => {
+            setTestEmailFeedback(null);
+            sendTestEmailMutation.mutate();
+          }}
+          disabled={sendTestEmailMutation.isPending}
+          className="rounded-md border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-100 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
+        >
+          {sendTestEmailMutation.isPending ? "Отправляем…" : "Отправить тестовое письмо"}
+        </button>
         <Link
           href={`/events/${event.id}/edit`}
           className="rounded-md border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
@@ -100,6 +125,23 @@ export function EventCard({ event }: { event: Event }) {
           История
         </Link>
       </div>
+
+      {testEmailFeedback && (
+        <Modal
+          title={testEmailFeedback.ok ? "Тестовое письмо отправлено" : "Ошибка отправки"}
+          onClose={() => setTestEmailFeedback(null)}
+        >
+          <p
+            className={
+              testEmailFeedback.ok
+                ? "text-sm text-emerald-600 dark:text-emerald-400"
+                : "text-sm text-red-600 dark:text-red-400"
+            }
+          >
+            {testEmailFeedback.message}
+          </p>
+        </Modal>
+      )}
 
       {testRunFailed && (
         <Modal title="Ошибка проверки" onClose={() => setTestRunFailed(null)}>

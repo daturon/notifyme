@@ -1,4 +1,4 @@
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { db } from "../db";
 import { events, notificationLog, runLog } from "../db/schema";
 
@@ -54,6 +54,45 @@ export async function insertRunLog(entry: {
       rawResult: entry.rawResult,
     })
     .returning();
+  return row;
+}
+
+// "Сегодня" — по локальному часовому поясу пользователя, а не UTC-дате
+// сервера (тот же принцип, что и в lib/triggers/exchangeRate/date.ts, раздел
+// 9 п.5 ТЗ). Сравниваем календарные даты, а не диапазон timestamptz, чтобы не
+// возиться с UTC-смещением/DST при построении границ суток.
+const NOTIFICATION_TIME_ZONE = "Europe/Minsk";
+
+function localDateString(date: Date): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: NOTIFICATION_TIME_ZONE,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+}
+
+// Источник правды для правила "не более 1 письма в сутки на событие"
+// (раздел 1.2, 4.4 ТЗ) — используется Notification Engine.
+export async function hasSentNotificationToday(eventId: string, now: Date = new Date()): Promise<boolean> {
+  const [latest] = await db
+    .select({ sentAt: notificationLog.sentAt })
+    .from(notificationLog)
+    .where(and(eq(notificationLog.eventId, eventId), eq(notificationLog.status, "sent")))
+    .orderBy(desc(notificationLog.sentAt))
+    .limit(1);
+
+  if (!latest) return false;
+  return localDateString(latest.sentAt) === localDateString(now);
+}
+
+export async function insertNotificationLog(entry: {
+  eventId: string;
+  subject: string;
+  body: string;
+  status: "sent" | "failed";
+}): Promise<NotificationLogRow> {
+  const [row] = await db.insert(notificationLog).values(entry).returning();
   return row;
 }
 
