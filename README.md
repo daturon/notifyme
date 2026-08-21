@@ -77,6 +77,45 @@ curl -i -X POST http://localhost:3000/api/cron/run \
 
 **После деплоя обязательно проверьте в Vercel Dashboard (Project → Settings → Environment Variables), что переменная `CRON_SECRET` задана для production-окружения** — Vercel сам подставляет её значение в заголовок `Authorization: Bearer …` при вызове cron-задач (раздел 7 ТЗ), поэтому значение в Vercel и значение, которое проверяет `/api/cron/run`, должны быть одной и той же переменной окружения проекта, а не двумя независимо придуманными секретами.
 
+## Статус
+
+`/status` (раздел 9 п.4 ТЗ) — простая страница для беглой проверки "всё живо", не заходя в логи Vercel: время последнего запуска cron (из `run_log`), число активных событий, число писем, отправленных за последние 7 дней (из `notification_log`). Закрыта тем же паролем (`APP_PASSWORD`), что и остальное приложение.
+
+## Деплой на Vercel
+
+1. **Подключите репозиторий.** [vercel.com/new](https://vercel.com/new) → Import Git Repository → выберите этот репозиторий. Next.js определяется автоматически, Build Command/Output Directory менять не нужно.
+
+2. **Заведите Postgres.** Проще всего — через Vercel Marketplace: Project → Storage → Create Database → Supabase (или Neon). После создания Vercel сам пропишет `DATABASE_URL` в переменные окружения проекта.
+   Если БД уже есть в отдельном Supabase-проекте — connection string берётся в Supabase Dashboard → Project Settings → Database → Connection string (**Transaction pooler**, порт 6543 — именно pooler-строка, не прямое подключение, т.к. serverless-функции открывают много коротких соединений).
+
+3. **Получите ключ Resend.** [resend.com](https://resend.com) → API Keys → Create API Key. Без верификации собственного домена письма можно слать только с `onboarding@resend.dev` (значение по умолчанию для `NOTIFICATIONS_FROM_EMAIL`) — этого достаточно для запуска.
+
+4. **Добавьте переменные окружения.** Project → Settings → Environment Variables, для **Production** (и, при желании, Preview):
+
+   | Переменная                  | Значение                                                             |
+   | ---------------------------- | --------------------------------------------------------------------- |
+   | `DATABASE_URL`                | connection string из шага 2                                          |
+   | `RESEND_API_KEY`              | ключ из шага 3                                                       |
+   | `NOTIFICATIONS_FROM_EMAIL`    | опционально; по умолчанию `NotifyMe <onboarding@resend.dev>`         |
+   | `CRON_SECRET`                 | сгенерируйте случайную строку (например, `openssl rand -hex 32`)     |
+   | `APP_PASSWORD`                | пароль для входа в приложение                                        |
+
+5. **Примените миграции к продакшн-БД.** Локально, указав `DATABASE_URL` продакшна:
+
+   ```bash
+   DATABASE_URL=<production connection string> pnpm run db:migrate
+   ```
+
+6. **Задеплойте.** Push в основную ветку (или Deploy в интерфейсе Vercel). `vercel.json` уже содержит расписание крон-задачи — Vercel создаст её автоматически при первом продакшн-деплое.
+
+### Что проверить вручную после деплоя
+
+- **Resend → Domains**: если планируете слать не с `onboarding@resend.dev`, а со своего адреса — добавьте и верифицируйте домен (Resend Dashboard → Domains), затем обновите `NOTIFICATIONS_FROM_EMAIL`.
+- **Vercel Dashboard → Settings → Cron Jobs**: убедитесь, что задача `/api/cron/run` создана и включена (создаётся автоматически из `vercel.json`, но на Hobby-плане cron включён по умолчанию только для одного проекта аккаунта — проверьте, что это не конфликтует с другими).
+- **Vercel Dashboard → Settings → Environment Variables**: `CRON_SECRET` должен быть задан для Production — иначе `/api/cron/run` будет отвечать `401` даже вызовам от самого Vercel Cron (см. раздел «Cron» выше).
+- Открыть `/status` после первого срабатывания cron и убедиться, что «Последний запуск» и счётчики обновились.
+- Зайти на продакшн-домен и убедиться, что форма пароля (`/login`) действительно требуется — если нет, значит `APP_PASSWORD` не подхватился.
+
 ## Скрипты
 
 - `pnpm run dev` — запуск дев-сервера

@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, count, desc, eq, gte, max } from "drizzle-orm";
 import { db } from "../db";
 import { events, notificationLog, runLog } from "../db/schema";
 
@@ -100,6 +100,33 @@ export async function insertNotificationLog(entry: {
 }): Promise<NotificationLogRow> {
   const [row] = await db.insert(notificationLog).values(entry).returning();
   return row;
+}
+
+// Сводка для страницы /status (раздел 9 п.4 ТЗ) — беглый показатель того, что
+// cron жив, без захода в логи Vercel.
+export interface StatusStats {
+  lastRunAt: Date | null;
+  activeEventsCount: number;
+  sentLast7Days: number;
+}
+
+export async function getStatusStats(now: Date = new Date()): Promise<StatusStats> {
+  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+  const [[lastRun], [activeCount], [sentCount]] = await Promise.all([
+    db.select({ lastRunAt: max(runLog.ranAt) }).from(runLog),
+    db.select({ count: count() }).from(events).where(eq(events.isActive, true)),
+    db
+      .select({ count: count() })
+      .from(notificationLog)
+      .where(and(eq(notificationLog.status, "sent"), gte(notificationLog.sentAt, sevenDaysAgo))),
+  ]);
+
+  return {
+    lastRunAt: lastRun?.lastRunAt ?? null,
+    activeEventsCount: activeCount?.count ?? 0,
+    sentLast7Days: sentCount?.count ?? 0,
+  };
 }
 
 export async function getEventHistory(
