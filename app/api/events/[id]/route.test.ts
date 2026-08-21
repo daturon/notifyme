@@ -9,7 +9,7 @@ vi.mock("@/lib/events/repository", () => ({
 }));
 
 const { getEventById, updateEvent, deleteEvent } = await import("@/lib/events/repository");
-const { PUT, DELETE } = await import("./route");
+const { GET, PUT, DELETE } = await import("./route");
 
 const eventId = "11111111-1111-1111-1111-111111111111";
 
@@ -35,6 +35,32 @@ beforeEach(() => {
   vi.mocked(getEventById).mockReset();
   vi.mocked(updateEvent).mockReset();
   vi.mocked(deleteEvent).mockReset();
+});
+
+describe("GET /api/events/:id", () => {
+  it("returns 404 when the event does not exist", async () => {
+    vi.mocked(getEventById).mockResolvedValue(undefined);
+
+    const response = await GET(
+      new NextRequest(`http://localhost/api/events/${eventId}`),
+      params(eventId),
+    );
+
+    expect(response.status).toBe(404);
+  });
+
+  it("returns the event", async () => {
+    vi.mocked(getEventById).mockResolvedValue(makeEvent());
+
+    const response = await GET(
+      new NextRequest(`http://localhost/api/events/${eventId}`),
+      params(eventId),
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.event.id).toBe(eventId);
+  });
 });
 
 describe("PUT /api/events/:id", () => {

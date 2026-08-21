@@ -4,6 +4,19 @@ import { ApiError, errorResponse } from "@/lib/http/api-error";
 import { getProvider } from "@/lib/triggers/registry";
 import { updateEventSchema } from "@/lib/validation/events";
 
+export async function GET(_request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  try {
+    const { id } = await params;
+    const event = await getEventById(id);
+    if (!event) {
+      throw new ApiError(404, `Event ${id} not found`);
+    }
+    return NextResponse.json({ event });
+  } catch (error) {
+    return errorResponse(error);
+  }
+}
+
 export async function PUT(request: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   try {
     const { id } = await params;
