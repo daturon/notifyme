@@ -23,8 +23,9 @@ export interface TaskFormValues {
   // workWindow
   maxWindSpeedKmh: number;
   minHours: number;
+  weekdayStartHour: number;
   weekdayEndHour: number;
-  dayStartHour: number;
+  weekendStartHour: number;
 }
 
 const DEFAULT_VALUES: TaskFormValues = {
@@ -37,8 +38,9 @@ const DEFAULT_VALUES: TaskFormValues = {
   maxTempC: 25,
   maxWindSpeedKmh: 30,
   minHours: 2,
-  weekdayEndHour: 18,
-  dayStartHour: 8,
+  weekdayStartHour: 18,
+  weekdayEndHour: 21,
+  weekendStartHour: 8,
 };
 
 export function taskFormValuesFromTask(task?: {
@@ -61,8 +63,9 @@ export function taskFormValuesFromTask(task?: {
       maxTempC: rules.maxTempC ?? DEFAULT_VALUES.maxTempC,
       maxWindSpeedKmh: rules.maxWindSpeedKmh,
       minHours: rules.minHours,
+      weekdayStartHour: rules.weekdayStartHour,
       weekdayEndHour: rules.weekdayEndHour,
-      dayStartHour: rules.dayStartHour,
+      weekendStartHour: rules.weekendStartHour,
     };
   }
 
@@ -87,8 +90,9 @@ export function taskFormValuesToWeatherRules(values: TaskFormValues): HouseholdT
       kind: "workWindow",
       maxWindSpeedKmh: values.maxWindSpeedKmh,
       minHours: values.minHours,
+      weekdayStartHour: values.weekdayStartHour,
       weekdayEndHour: values.weekdayEndHour,
-      dayStartHour: values.dayStartHour,
+      weekendStartHour: values.weekendStartHour,
       ...tempRange,
     };
   }
@@ -132,6 +136,9 @@ export function TaskForm({
     if (values.tempRangeEnabled && values.minTempC > values.maxTempC) {
       return;
     }
+    if (values.kind === "workWindow" && values.weekdayStartHour >= values.weekdayEndHour) {
+      return;
+    }
     await onSubmit({
       eventId,
       title: values.title,
@@ -141,6 +148,7 @@ export function TaskForm({
   }
 
   const rangeInvalid = values.tempRangeEnabled && values.minTempC > values.maxTempC;
+  const weekdayWindowInvalid = values.kind === "workWindow" && values.weekdayStartHour >= values.weekdayEndHour;
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
@@ -261,24 +269,23 @@ export function TaskForm({
 
           <div className="grid grid-cols-2 gap-3">
             <div className="flex flex-col gap-1">
-              <label htmlFor="dayStartHour" className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
-                Начало окна, час
+              <label htmlFor="weekdayStartHour" className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                Будни: начало окна, час
               </label>
               <input
-                id="dayStartHour"
+                id="weekdayStartHour"
                 type="number"
                 min={0}
                 max={23}
                 required
-                value={values.dayStartHour}
-                onChange={(e) => update("dayStartHour", Number(e.target.value))}
+                value={values.weekdayStartHour}
+                onChange={(e) => update("weekdayStartHour", Number(e.target.value))}
                 className={inputClass()}
               />
-              <p className="text-xs text-zinc-500">Для будущих дней; сегодня окно начинается с текущего часа.</p>
             </div>
             <div className="flex flex-col gap-1">
               <label htmlFor="weekdayEndHour" className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
-                Конец окна в будни, час
+                Будни: конец окна, час
               </label>
               <input
                 id="weekdayEndHour"
@@ -290,8 +297,32 @@ export function TaskForm({
                 onChange={(e) => update("weekdayEndHour", Number(e.target.value))}
                 className={inputClass()}
               />
-              <p className="text-xs text-zinc-500">В выходные окно идёт до заката.</p>
             </div>
+          </div>
+          {weekdayWindowInvalid && (
+            <p className="text-xs text-red-600 dark:text-red-400">
+              «Начало окна» в будни должно быть раньше «Конца окна»
+            </p>
+          )}
+
+          <div className="flex flex-col gap-1">
+            <label htmlFor="weekendStartHour" className="text-xs font-medium text-zinc-700 dark:text-zinc-300">
+              Выходные: начало окна, час
+            </label>
+            <input
+              id="weekendStartHour"
+              type="number"
+              min={0}
+              max={23}
+              required
+              value={values.weekendStartHour}
+              onChange={(e) => update("weekendStartHour", Number(e.target.value))}
+              className={inputClass()}
+            />
+            <p className="text-xs text-zinc-500">
+              В выходные окно всегда идёт до заката (конец часа не задаётся отдельно). Сегодня окно всегда
+              начинается не раньше текущего часа.
+            </p>
           </div>
 
           <TempRangeControl values={values} update={update} rangeInvalid={rangeInvalid} />
@@ -307,7 +338,7 @@ export function TaskForm({
       <div className="flex gap-2 pt-2">
         <button
           type="submit"
-          disabled={pending || rangeInvalid}
+          disabled={pending || rangeInvalid || weekdayWindowInvalid}
           className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50 dark:bg-zinc-100 dark:text-black dark:hover:bg-zinc-300"
         >
           {pending ? "Сохранение…" : submitLabel}

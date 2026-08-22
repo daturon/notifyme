@@ -15,8 +15,9 @@ export interface WorkWindowWeatherRules {
   maxTempC?: number;
   maxWindSpeedKmh: number;
   minHours: number;
+  weekdayStartHour: number;
   weekdayEndHour: number;
-  dayStartHour: number;
+  weekendStartHour: number;
 }
 
 export type HouseholdTaskWeatherRules = DailyWeatherRules | WorkWindowWeatherRules;

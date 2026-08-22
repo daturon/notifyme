@@ -34,13 +34,17 @@ export const workWindowRulesSchema = z
     // Минимальная длительность непрерывного благоприятного окна, чтобы
     // работа вообще имела смысл начинать.
     minHours: z.number().min(0.5).max(12).default(2),
-    // Верхняя граница окна в будни (18:00 по умолчанию) — фактическая
-    // граница всегда min(этот час, закат). В выходные окно ограничено
-    // только закатом.
-    weekdayEndHour: z.number().int().min(0).max(23).default(18),
-    // Нижняя граница окна для дней, отличных от сегодняшнего (для
-    // сегодняшнего дня нижняя граница — текущее время).
-    dayStartHour: z.number().int().min(0).max(23).default(8),
+    // Границы окна в будни — обычно вечер после работы (18:00-21:00 по
+    // умолчанию). Верхняя граница фактически всегда min(weekdayEndHour,
+    // закат) — окно не может длиться дольше светового дня.
+    weekdayStartHour: z.number().int().min(0).max(23).default(18),
+    weekdayEndHour: z.number().int().min(0).max(23).default(21),
+    // Нижняя граница окна в выходные — весь день, окно идёт до заката (без
+    // отдельного верхнего часа).
+    weekendStartHour: z.number().int().min(0).max(23).default(8),
+  })
+  .refine((rules) => rules.weekdayStartHour < rules.weekdayEndHour, {
+    message: "weekdayStartHour must be < weekdayEndHour",
   })
   .refine(
     (rules) => rules.minTempC === undefined || rules.maxTempC === undefined || rules.minTempC <= rules.maxTempC,
@@ -65,7 +69,8 @@ export function describeWeatherRules(rules: WeatherRules): string {
     const parts = [
       `минимум ${rules.minHours} ч подряд`,
       `ветер до ${rules.maxWindSpeedKmh} км/ч`,
-      `будни до ${rules.weekdayEndHour}:00`,
+      `будни ${rules.weekdayStartHour}:00–${rules.weekdayEndHour}:00`,
+      "выходные — до заката",
     ];
     if (rules.minTempC !== undefined && rules.maxTempC !== undefined) {
       parts.push(`${rules.minTempC}–${rules.maxTempC}°C`);

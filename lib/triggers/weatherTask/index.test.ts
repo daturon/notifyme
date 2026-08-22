@@ -165,8 +165,11 @@ describe("weatherTaskProvider.check", () => {
           kind: "workWindow",
           maxWindSpeedKmh: 30,
           minHours: 2,
-          weekdayEndHour: 23, // wide open so the test isn't time-of-day flaky
-          dayStartHour: 0,
+          // Wide open on both weekday and weekend so the test isn't
+          // time-of-day flaky.
+          weekdayStartHour: 0,
+          weekdayEndHour: 23,
+          weekendStartHour: 0,
         },
       }),
     ]);

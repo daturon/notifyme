@@ -39,8 +39,9 @@ function workWindowRules(overrides: Partial<WorkWindowRules> = {}): WorkWindowRu
     kind: "workWindow",
     maxWindSpeedKmh: 30,
     minHours: 2,
+    weekdayStartHour: 8,
     weekdayEndHour: 18,
-    dayStartHour: 8,
+    weekendStartHour: 8,
     ...overrides,
   };
 }
@@ -264,7 +265,7 @@ describe("evaluateTask (workWindow kind)", () => {
     const evaluation = evaluateTask({
       lastDoneAt: null,
       intervalDays: 1,
-      weatherRules: workWindowRules({ minHours: 2, dayStartHour: 8, weekdayEndHour: 18 }),
+      weatherRules: workWindowRules({ minHours: 2, weekdayEndHour: 18 }),
       forecast,
       today: "2026-06-15",
       now: new Date("2026-06-15T12:00:00+03:00"),
@@ -290,7 +291,7 @@ describe("evaluateTask (workWindow kind)", () => {
     const evaluation = evaluateTask({
       lastDoneAt: null,
       intervalDays: 1,
-      weatherRules: workWindowRules({ minHours: 2, dayStartHour: 8, weekdayEndHour: 18, minTempC: 5, maxTempC: 30 }),
+      weatherRules: workWindowRules({ minHours: 2, weekdayEndHour: 18, minTempC: 5, maxTempC: 30 }),
       forecast,
       today: "2026-06-15",
       now: new Date("2026-06-15T10:00:00+03:00"), // well before 14:00 local
@@ -318,7 +319,7 @@ describe("evaluateTask (workWindow kind)", () => {
     const evaluation = evaluateTask({
       lastDoneAt: null,
       intervalDays: 1,
-      weatherRules: workWindowRules({ minHours: 2, dayStartHour: 8, weekdayEndHour: 18 }),
+      weatherRules: workWindowRules({ minHours: 2, weekdayEndHour: 18 }),
       forecast,
       today: "2026-06-20",
       now: new Date("2026-06-20T10:00:00+03:00"),
@@ -343,7 +344,7 @@ describe("evaluateTask (workWindow kind)", () => {
     const evaluation = evaluateTask({
       lastDoneAt: null,
       intervalDays: 1,
-      weatherRules: workWindowRules({ minHours: 2, dayStartHour: 8 }),
+      weatherRules: workWindowRules({ minHours: 2 }),
       forecast,
       today: "2026-06-15",
       now: new Date("2026-06-15T09:30:00+03:00"), // 09:30 local — 09:00 slot already past
@@ -367,7 +368,7 @@ describe("evaluateTask (workWindow kind)", () => {
     const evaluation = evaluateTask({
       lastDoneAt: null,
       intervalDays: 1,
-      weatherRules: workWindowRules({ minHours: 2, dayStartHour: 8, weekdayEndHour: 18 }),
+      weatherRules: workWindowRules({ minHours: 2, weekdayEndHour: 18 }),
       forecast,
       today: "2026-06-15",
       now: new Date("2026-06-15T22:00:00+03:00"), // past today's cutoff already
@@ -376,5 +377,34 @@ describe("evaluateTask (workWindow kind)", () => {
     expect(evaluation.triggered).toBe(true);
     const window = evaluation.window as FavorableWorkWindow;
     expect(window.date).toBe("2026-06-16");
+  });
+
+  it("uses weekdayStartHour, not weekendStartHour, as the weekday lower bound (evening-only availability)", () => {
+    // User scenario: available weekdays only 18:00-21:00 (after work), calm
+    // and dry hour at 09:00 must NOT count even though it satisfies the
+    // weather rules — it's before the weekday window opens.
+    const forecast = forecastData(
+      [day("2026-06-15", 0, 22, 16, "2026-06-15T21:30")], // Monday
+      [
+        hour("2026-06-15T09:00", 0, 18, 5), // calm and dry, but too early
+        hour("2026-06-15T19:00", 0, 18, 5),
+        hour("2026-06-15T20:00", 0, 18, 5),
+      ],
+    );
+
+    const evaluation = evaluateTask({
+      lastDoneAt: null,
+      intervalDays: 1,
+      weatherRules: workWindowRules({ minHours: 2, weekdayStartHour: 18, weekdayEndHour: 21 }),
+      forecast,
+      today: "2026-06-15",
+      now: new Date("2026-06-15T07:00:00+03:00"), // before the window opens
+    });
+
+    expect(evaluation.triggered).toBe(true);
+    const window = evaluation.window as FavorableWorkWindow;
+    expect(window.startTime).toBe("2026-06-15T19:00");
+    expect(window.endTime).toBe("2026-06-15T21:00");
+    expect(window.hours).toBe(2);
   });
 });

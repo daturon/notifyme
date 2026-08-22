@@ -178,10 +178,12 @@ function padHour(hour: number): string {
   return String(hour).padStart(2, "0");
 }
 
-// Границы рабочего окна для конкретного дня: нижняя — dayStartHour (или
-// текущее время, если это сегодня и оно позже dayStartHour), верхняя — закат
-// в выходные, min(weekdayEndHour, закат) в будни (раздел из диалога с
-// пользователем: "в будни по 18:00 или в выходные дни днём").
+// Границы рабочего окна для конкретного дня — разные для будней и выходных
+// (по запросу пользователя: "в будни могу работать с 18 до 21, в выходные до
+// заката"). Нижняя граница — weekdayStartHour/weekendStartHour, или текущее
+// время, если это сегодня и оно позже планового начала. Верхняя — закат в
+// выходные, min(weekdayEndHour, закат) в будни (окно не может быть длиннее
+// светового дня).
 function windowBoundsForDay(params: {
   day: DailyForecast;
   rules: WorkWindowRules;
@@ -191,7 +193,8 @@ function windowBoundsForDay(params: {
   const { day, rules, isToday, nowLocal } = params;
   const weekend = isWeekend(day.date);
 
-  const defaultStart = `${day.date}T${padHour(rules.dayStartHour)}:00`;
+  const scheduledStartHour = weekend ? rules.weekendStartHour : rules.weekdayStartHour;
+  const defaultStart = `${day.date}T${padHour(scheduledStartHour)}:00`;
   const startTime = isToday && nowLocal > defaultStart ? nowLocal : defaultStart;
 
   const weekdayEnd = `${day.date}T${padHour(rules.weekdayEndHour)}:00`;
