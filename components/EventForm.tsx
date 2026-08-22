@@ -10,9 +10,17 @@ import {
   exchangeRateFormConfigToEventConfig,
   type ExchangeRateFormConfig,
 } from "@/components/ExchangeRateConfigForm";
+import {
+  DEFAULT_WEATHER_TASK_FORM_CONFIG,
+  WeatherTaskConfigForm,
+  weatherTaskFormConfigFromEventConfig,
+  weatherTaskFormConfigToEventConfig,
+  type WeatherTaskFormConfig,
+} from "@/components/WeatherTaskConfigForm";
 import { getEventTypes, type Event, type EventInput } from "@/lib/api/events";
 
 const EXCHANGE_RATE_TYPE = "exchange_rate";
+const WEATHER_TASK_TYPE = "weather_task";
 
 export interface EventFormValues {
   name: string;
@@ -21,19 +29,25 @@ export interface EventFormValues {
   isActive: boolean;
   configText: string;
   exchangeRateConfig: ExchangeRateFormConfig;
+  weatherTaskConfig: WeatherTaskFormConfig;
 }
 
 function toFormValues(event?: Event): EventFormValues {
+  const hasBuiltInForm = event?.type === EXCHANGE_RATE_TYPE || event?.type === WEATHER_TASK_TYPE;
   return {
     name: event?.name ?? "",
     type: event?.type ?? "",
     recipientEmail: event?.recipientEmail ?? "",
     isActive: event?.isActive ?? true,
-    configText: event && event.type !== EXCHANGE_RATE_TYPE ? JSON.stringify(event.config, null, 2) : "{}",
+    configText: event && !hasBuiltInForm ? JSON.stringify(event.config, null, 2) : "{}",
     exchangeRateConfig:
       event?.type === EXCHANGE_RATE_TYPE
         ? exchangeRateFormConfigFromEventConfig(event.config)
         : DEFAULT_EXCHANGE_RATE_FORM_CONFIG,
+    weatherTaskConfig:
+      event?.type === WEATHER_TASK_TYPE
+        ? weatherTaskFormConfigFromEventConfig(event.config)
+        : DEFAULT_WEATHER_TASK_FORM_CONFIG,
   };
 }
 
@@ -71,6 +85,8 @@ export function EventForm({
         return;
       }
       config = exchangeRateFormConfigToEventConfig(values.exchangeRateConfig);
+    } else if (values.type === WEATHER_TASK_TYPE) {
+      config = weatherTaskFormConfigToEventConfig(values.weatherTaskConfig);
     } else {
       try {
         config = JSON.parse(values.configText);
@@ -163,6 +179,15 @@ export function EventForm({
           <ExchangeRateConfigForm
             value={values.exchangeRateConfig}
             onChange={(exchangeRateConfig) => update("exchangeRateConfig", exchangeRateConfig)}
+          />
+          {configError && <p className="text-xs text-red-600 dark:text-red-400">{configError}</p>}
+        </div>
+      ) : values.type === WEATHER_TASK_TYPE ? (
+        <div className="flex flex-col gap-1">
+          <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Параметры триггера</span>
+          <WeatherTaskConfigForm
+            value={values.weatherTaskConfig}
+            onChange={(weatherTaskConfig) => update("weatherTaskConfig", weatherTaskConfig)}
           />
           {configError && <p className="text-xs text-red-600 dark:text-red-400">{configError}</p>}
         </div>
