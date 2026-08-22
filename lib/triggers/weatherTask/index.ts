@@ -2,7 +2,7 @@ import type { TriggerCheckContext, TriggerProvider } from "../types";
 import { weatherTaskConfigSchema, type WeatherTaskConfig } from "./config";
 import { todayDateString } from "./date";
 import { evaluateTask } from "./logic";
-import { fetchForecast, type DailyForecast } from "./openMeteo";
+import { fetchForecast, type ForecastData } from "./openMeteo";
 import { listTasksByEvent } from "./repository";
 import { weatherRulesSchema } from "./taskRules";
 
@@ -49,8 +49,10 @@ function emptyPayload(
 
 // Провайдер типа weather_task (раздел 4.3 ТЗ). Раз в сутки для каждой
 // заведённой работы по дому проверяет: (а) прошло ли достаточно времени с
-// последнего выполнения (периодичность); (б) есть ли в прогнозе Open-Meteo
-// на 5-7 дней вперёд подходящее погодное окно. Никогда не бросает
+// последнего выполнения (периодичность); (б) подходит ли погода —
+// периодические работы оцениваются по дням (findFavorableWindow), разовые
+// работы на открытом воздухе ("workWindow") — по часам, с учётом ветра и
+// рабочего окна до заката/конца буднего дня (logic.ts). Никогда не бросает
 // исключение из-за недоступности Open-Meteo — при ошибке возвращает
 // status: "error" в payload, чтобы не ронять остальные события в общем
 // cron-запуске (раздел 7 ТЗ).
@@ -67,7 +69,7 @@ export const weatherTaskProvider: TriggerProvider<WeatherTaskConfig> = {
       };
     }
 
-    let forecast: DailyForecast[];
+    let forecast: ForecastData;
     try {
       forecast = await fetchForecast(config.location, config.forecastDays);
     } catch (error) {
@@ -79,6 +81,7 @@ export const weatherTaskProvider: TriggerProvider<WeatherTaskConfig> = {
     }
 
     const today = todayDateString();
+    const now = new Date();
     const recommendations: WeatherTaskRecommendation[] = [];
     const taskStatuses: WeatherTaskStatus[] = [];
 
@@ -90,6 +93,7 @@ export const weatherTaskProvider: TriggerProvider<WeatherTaskConfig> = {
         weatherRules: rules,
         forecast,
         today,
+        now,
       });
 
       taskStatuses.push({

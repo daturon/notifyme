@@ -2,11 +2,24 @@
 // lib/api/events.ts.
 import { ApiClientError } from "./events";
 
-export interface HouseholdTaskWeatherRules {
+export interface DailyWeatherRules {
+  kind: "daily";
   minDryDaysInRow: number;
   minTempC?: number;
   maxTempC?: number;
 }
+
+export interface WorkWindowWeatherRules {
+  kind: "workWindow";
+  minTempC?: number;
+  maxTempC?: number;
+  maxWindSpeedKmh: number;
+  minHours: number;
+  weekdayEndHour: number;
+  dayStartHour: number;
+}
+
+export type HouseholdTaskWeatherRules = DailyWeatherRules | WorkWindowWeatherRules;
 
 export interface HouseholdTask {
   id: string;

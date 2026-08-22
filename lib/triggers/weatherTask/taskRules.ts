@@ -1,11 +1,18 @@
 import { z } from "zod";
 
-// Погодные условия-предпосылки для одной работы (раздел 4.3 ТЗ): "нет дождя
-// последние/в ближайшие N дней подряд", опционально диапазон температуры.
-// Форма на фронте всегда собирает этот объект из простых контролов
-// (число + два поля температуры) — сырой JSON пользователю не показывается.
-export const weatherRulesSchema = z
+// Погодные условия-предпосылки для одной работы (раздел 4.3 ТЗ). Два вида:
+// - "daily" — периодическая работа, где неважен конкретный час (покос,
+//   фасад): "нет дождя N дней подряд", опционально диапазон температуры.
+// - "workWindow" — однодневная оценка "могу ли я сегодня/на неделе
+//   поработать и сколько часов", завязанная на почасовой прогноз (ветер,
+//   рабочее окно до заката/до конца буднего дня). Добавлено по запросу
+//   пользователя: демонтаж короба на лесах — нужен не просто "подходящий
+//   день", а конкретное число часов до темноты.
+// Старые записи в БД без поля kind (созданные до этого расширения)
+// интерпретируются как "daily" — см. preprocess ниже.
+export const dailyWeatherRulesSchema = z
   .object({
+    kind: z.literal("daily").default("daily"),
     minDryDaysInRow: z.number().int().min(1).max(14).default(1),
     minTempC: z.number().min(-50).max(60).optional(),
     maxTempC: z.number().min(-50).max(60).optional(),
@@ -15,13 +22,62 @@ export const weatherRulesSchema = z
     { message: "minTempC must be <= maxTempC" },
   );
 
+export const workWindowRulesSchema = z
+  .object({
+    kind: z.literal("workWindow"),
+    // Комфортный диапазон температуры (опционально — если не важен).
+    minTempC: z.number().min(-50).max(60).optional(),
+    maxTempC: z.number().min(-50).max(60).optional(),
+    // Порог "не сильного" ветра (Open-Meteo отдаёт скорость в км/ч по
+    // умолчанию).
+    maxWindSpeedKmh: z.number().min(0).max(150).default(30),
+    // Минимальная длительность непрерывного благоприятного окна, чтобы
+    // работа вообще имела смысл начинать.
+    minHours: z.number().min(0.5).max(12).default(2),
+    // Верхняя граница окна в будни (18:00 по умолчанию) — фактическая
+    // граница всегда min(этот час, закат). В выходные окно ограничено
+    // только закатом.
+    weekdayEndHour: z.number().int().min(0).max(23).default(18),
+    // Нижняя граница окна для дней, отличных от сегодняшнего (для
+    // сегодняшнего дня нижняя граница — текущее время).
+    dayStartHour: z.number().int().min(0).max(23).default(8),
+  })
+  .refine(
+    (rules) => rules.minTempC === undefined || rules.maxTempC === undefined || rules.minTempC <= rules.maxTempC,
+    { message: "minTempC must be <= maxTempC" },
+  );
+
+export const weatherRulesSchema = z.preprocess((value) => {
+  if (value && typeof value === "object" && !("kind" in (value as Record<string, unknown>))) {
+    return { ...(value as Record<string, unknown>), kind: "daily" };
+  }
+  return value;
+}, z.union([dailyWeatherRulesSchema, workWindowRulesSchema]));
+
+export type DailyWeatherRules = z.infer<typeof dailyWeatherRulesSchema>;
+export type WorkWindowRules = z.infer<typeof workWindowRulesSchema>;
 export type WeatherRules = z.infer<typeof weatherRulesSchema>;
 
 // Человекочитаемое описание условий для списка задач и писем (раздел 8,
 // экран 3: "погодные условия человекочитаемо").
 export function describeWeatherRules(rules: WeatherRules): string {
-  const parts: string[] = [];
+  if (rules.kind === "workWindow") {
+    const parts = [
+      `минимум ${rules.minHours} ч подряд`,
+      `ветер до ${rules.maxWindSpeedKmh} км/ч`,
+      `будни до ${rules.weekdayEndHour}:00`,
+    ];
+    if (rules.minTempC !== undefined && rules.maxTempC !== undefined) {
+      parts.push(`${rules.minTempC}–${rules.maxTempC}°C`);
+    } else if (rules.minTempC !== undefined) {
+      parts.push(`от ${rules.minTempC}°C`);
+    } else if (rules.maxTempC !== undefined) {
+      parts.push(`до ${rules.maxTempC}°C`);
+    }
+    return parts.join(", ");
+  }
 
+  const parts: string[] = [];
   parts.push(
     rules.minDryDaysInRow === 1
       ? "без дождя"

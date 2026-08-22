@@ -29,16 +29,19 @@ function task(overrides: Partial<Awaited<ReturnType<typeof listTasksByEvent>>[nu
 
 function forecastFrom(today: string, days: Array<{ precip: number; tempMax: number; tempMin: number }>) {
   const start = new Date(`${today}T00:00:00Z`);
-  return days.map((d, i) => {
+  const daily = days.map((d, i) => {
     const date = new Date(start);
     date.setUTCDate(date.getUTCDate() + i);
+    const dateStr = date.toISOString().slice(0, 10);
     return {
-      date: date.toISOString().slice(0, 10),
+      date: dateStr,
       precipitationMm: d.precip,
       tempMaxC: d.tempMax,
       tempMinC: d.tempMin,
+      sunset: `${dateStr}T21:00`,
     };
   });
+  return { timezone: "Europe/Minsk", daily, hourly: [] };
 }
 
 beforeEach(() => {
@@ -137,5 +140,52 @@ describe("weatherTaskProvider.check", () => {
     const payload = result.payload as WeatherTaskPayload;
     expect(payload.recommendations).toHaveLength(2);
     expect(payload.recommendations.map((r) => r.title)).toEqual(["Покос травы", "Фасадные работы"]);
+  });
+
+  it("evaluates a workWindow task end-to-end using the hourly forecast", async () => {
+    const now = new Date();
+    const today = now.toISOString().slice(0, 10);
+    const tomorrow = new Date(now.getTime() + 86_400_000).toISOString().slice(0, 10);
+
+    function fullDayHours(dateStr: string) {
+      return Array.from({ length: 24 }, (_, h) => ({
+        time: `${dateStr}T${String(h).padStart(2, "0")}:00`,
+        temperatureC: 20,
+        precipitationMm: 0,
+        windSpeedKmh: 10,
+      }));
+    }
+
+    vi.mocked(listTasksByEvent).mockResolvedValue([
+      task({
+        title: "Работа на лесах",
+        intervalDays: 1,
+        lastDoneAt: null,
+        weatherRules: {
+          kind: "workWindow",
+          maxWindSpeedKmh: 30,
+          minHours: 2,
+          weekdayEndHour: 23, // wide open so the test isn't time-of-day flaky
+          dayStartHour: 0,
+        },
+      }),
+    ]);
+    vi.mocked(fetchForecast).mockResolvedValue({
+      timezone: "UTC",
+      // Two days of calm, dry, comfortable weather — today (unless it's
+      // already past 23:00 UTC) or tomorrow will always have a >=2h window,
+      // so this test isn't flaky near the day boundary.
+      daily: [
+        { date: today, precipitationMm: 0, tempMaxC: 20, tempMinC: 15, sunset: `${today}T23:30` },
+        { date: tomorrow, precipitationMm: 0, tempMaxC: 20, tempMinC: 15, sunset: `${tomorrow}T23:30` },
+      ],
+      hourly: [...fullDayHours(today), ...fullDayHours(tomorrow)],
+    });
+
+    const result = await weatherTaskProvider.check(config, { eventId });
+
+    expect(result.triggered).toBe(true);
+    const payload = result.payload as WeatherTaskPayload;
+    expect(payload.recommendations[0].reason).toContain("ч");
   });
 });

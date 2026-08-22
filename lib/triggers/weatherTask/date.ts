@@ -24,3 +24,23 @@ function toUtcTimestamp(dateString: string): number {
 export function daysBetween(fromDate: string, toDate: string): number {
   return Math.round((toUtcTimestamp(toDate) - toUtcTimestamp(fromDate)) / 86_400_000);
 }
+
+// "Сейчас" в часовом поясе локации события (а не сервера) — Open-Meteo
+// отдаёт почасовой прогноз в наивном локальном времени этой локации
+// (timezone=auto), поэтому для сравнения "сколько часов осталось до конца
+// рабочего окна сегодня" нужно то же самое время, а не UTC/Europe-Minsk
+// сервера. Формат совпадает с hourly.time из ответа Open-Meteo:
+// "YYYY-MM-DDTHH:MM".
+export function formatInTimeZone(date: Date, timeZone: string): string {
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  });
+  const parts = Object.fromEntries(formatter.formatToParts(date).map((part) => [part.type, part.value]));
+  return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
+}

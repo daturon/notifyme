@@ -36,6 +36,7 @@ async function main() {
     title: "Покос травы",
     intervalDays: 14,
     weatherRules: {
+      kind: "daily",
       minDryDaysInRow: 2,
       minTempC: 12,
       maxTempC: 28,
