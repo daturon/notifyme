@@ -1,6 +1,7 @@
 import { exchangeRateProvider } from "./exchangeRate";
 import { noopProvider } from "./providers/noop";
 import type { TriggerProvider } from "./types";
+import { weatherTaskProvider } from "./weatherTask";
 
 export type { TriggerProvider, TriggerCheckResult, TriggerCheckContext } from "./types";
 
@@ -10,10 +11,11 @@ function registerProvider(provider: TriggerProvider) {
   registry.set(provider.type, provider);
 }
 
-// Остальные провайдеры (weather_task) добавятся здесь по мере реализации —
-// регистрация остальных слоёв (API, cron) от этого не меняется.
+// Новые типы триггеров регистрируются здесь — остальные слои (API, cron,
+// Notification Engine) от этого не меняются (раздел 7 ТЗ, "Расширяемость").
 registerProvider(noopProvider);
 registerProvider(exchangeRateProvider);
+registerProvider(weatherTaskProvider);
 
 export function getProvider(type: string): TriggerProvider | undefined {
   return registry.get(type);
